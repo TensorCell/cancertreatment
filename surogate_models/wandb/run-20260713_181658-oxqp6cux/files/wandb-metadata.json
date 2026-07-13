@@ -1,0 +1,55 @@
+{
+  "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "CPython 3.10.20",
+  "startedAt": "2026-07-13T16:16:58.251098Z",
+  "args": [
+    "-csv_path",
+    "data/data.csv",
+    "-config",
+    "cnn_lstm_multi_loss/1.yml",
+    "-config_folder",
+    "configs",
+    "-wandb_config",
+    "wandb_config.yml",
+    "-saved_model_path",
+    "pretrained_models",
+    "-max_epochs",
+    "200",
+    "-seed",
+    "1"
+  ],
+  "program": "/home/zzox/AIntern/new_repo/cancertreatment/surogate_models/main.py",
+  "codePath": "surogate_models/main.py",
+  "codePathLocal": "main.py",
+  "git": {
+    "remote": "https://github.com/TensorCell/cancertreatment",
+    "commit": "10b17952a4b7ae73549b5cdb7f43d2be60f3fcf4"
+  },
+  "email": "ignacykozakiewicz@gmail.com",
+  "root": ".",
+  "host": "zzox",
+  "executable": "/home/zzox/miniforge3/envs/cancer-nn-5070/bin/python",
+  "cpu_count": 16,
+  "cpu_count_logical": 32,
+  "gpu": "NVIDIA GeForce RTX 5070 Laptop GPU",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1081101176832",
+      "used": "185025159168"
+    }
+  },
+  "memory": {
+    "total": "25195294720"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+      "memoryTotal": "8546942976",
+      "architecture": "Blackwell",
+      "uuid": "GPU-053029a0-0b48-e242-7ee9-4e79f5f82a38"
+    }
+  ],
+  "cudaVersion": "13.1",
+  "writerId": "9sdrfl1cd2juvzxuzoofsgcz2pog625h"
+}

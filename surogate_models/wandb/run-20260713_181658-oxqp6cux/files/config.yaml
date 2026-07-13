@@ -1,0 +1,110 @@
+_wandb:
+    value:
+        cli_version: 0.28.0
+        e:
+            9sdrfl1cd2juvzxuzoofsgcz2pog625h:
+                args:
+                    - -csv_path
+                    - data/data.csv
+                    - -config
+                    - cnn_lstm_multi_loss/1.yml
+                    - -config_folder
+                    - configs
+                    - -wandb_config
+                    - wandb_config.yml
+                    - -saved_model_path
+                    - pretrained_models
+                    - -max_epochs
+                    - "200"
+                    - -seed
+                    - "1"
+                codePath: surogate_models/main.py
+                codePathLocal: main.py
+                cpu_count: 16
+                cpu_count_logical: 32
+                cudaVersion: "13.1"
+                disk:
+                    /:
+                        total: "1081101176832"
+                        used: "185025159168"
+                email: ignacykozakiewicz@gmail.com
+                executable: /home/zzox/miniforge3/envs/cancer-nn-5070/bin/python
+                git:
+                    commit: 10b17952a4b7ae73549b5cdb7f43d2be60f3fcf4
+                    remote: https://github.com/TensorCell/cancertreatment
+                gpu: NVIDIA GeForce RTX 5070 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Blackwell
+                      memoryTotal: "8546942976"
+                      name: NVIDIA GeForce RTX 5070 Laptop GPU
+                      uuid: GPU-053029a0-0b48-e242-7ee9-4e79f5f82a38
+                host: zzox
+                memory:
+                    total: "25195294720"
+                os: Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39
+                program: /home/zzox/AIntern/new_repo/cancertreatment/surogate_models/main.py
+                python: CPython 3.10.20
+                root: .
+                startedAt: "2026-07-13T16:16:58.251098Z"
+                writerId: 9sdrfl1cd2juvzxuzoofsgcz2pog625h
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.10.20
+        t:
+            "1":
+                - 1
+                - 5
+                - 9
+                - 53
+                - 103
+            "2":
+                - 1
+                - 5
+                - 9
+                - 53
+                - 103
+            "3":
+                - 7
+                - 15
+                - 66
+            "4": 3.10.20
+            "5": 0.28.0
+            "12": 0.28.0
+            "13": linux-x86_64
+config_list:
+    value:
+        - single/lstm_2_1.yml
+        - single/lstm_2_1.yml
+        - single/lstm_2_1.yml
+losses:
+    value:
+        - L1
+        - L1
+        - L1
+main_loss:
+    value: L1
+margin_loss:
+    value: true
+margin_loss_w:
+    value: 5
+mode:
+    value: cnn_lstm
+name:
+    value: MultiHeadTaskRegressor
+seed:
+    value: 1
+w_losses:
+    value:
+        - 1
+        - 1
+        - 1
+        - 1
