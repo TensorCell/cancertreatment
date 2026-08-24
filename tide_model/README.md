@@ -1,4 +1,4 @@
-# nn-cancer-treatment-optimization
+# cancertreatment/tide_model
 
 TiDE (Time-series Dense Encoder) model for predicting tumour cell survival outcomes of radiotherapy protocols on the EMT6/Ro cell line.
 
@@ -12,7 +12,7 @@ TiDE (Time-series Dense Encoder) model for predicting tumour cell survival outco
 ## Project structure
 
 ```
-nn-cancer-treatment-optimization/
+cancertreatment/tide_model/
 ├── data/
 │   ├── data.csv               # Raw dataset (200,000 protocols × 21 rows each)
 │   └── README.md              # Data schema and preprocessing notes
