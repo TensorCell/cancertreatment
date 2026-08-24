@@ -1,4 +1,4 @@
-# tide_model
+# cancertreatment/tide_model
 
 TiDE (Time-series Dense Encoder) model for predicting tumour cell survival outcomes of radiotherapy protocols on the EMT6/Ro cell line.
 
