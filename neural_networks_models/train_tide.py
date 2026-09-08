@@ -3,19 +3,19 @@
 Usage
 -----
 # Full training run with defaults
-uv run python train.py --data_path data/data.csv
+uv run python train_tide.py --data_path data/data.csv
 
 # Quick smoke-test (2 epochs)
-uv run python train.py --data_path data/data.csv --max_epochs 2 --batch_size 512
+uv run python train_tide.py --data_path data/data.csv --max_epochs 2 --batch_size 512
 
 # Adjust model size
-uv run python train.py --data_path data/data.csv --hidden_size 512 --num_encoder_layers 4
+uv run python train_tide.py --data_path data/data.csv --hidden_size 512 --num_encoder_layers 4
 
 # Use MAE loss instead of MSE
-uv run python train.py --data_path data/data.csv --loss mae
+uv run python train_tide.py --data_path data/data.csv --loss mae
 
 # Enable Margin Ranking Loss alongside the base regression loss
-uv run python train.py --data_path data/data.csv --margin_loss --margin_loss_w 3
+uv run python train_tide.py --data_path data/data.csv --margin_loss --margin_loss_w 3
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import torch
 from tide.config import CancerTiDEConfig
 from tide.datasets.cancer_dataset import build_dataloaders
 from tide.evaluation.evaluate import evaluate
-from tide.inference.predict import load_model, explain_forecast_components
+from tide.inference.predict import load_model, explain_forecast_components, explain_input_saliency
 from tide.models.tide import TiDEModel
 from tide.trainer.trainer import Trainer
 
@@ -116,7 +116,7 @@ def parse_args() -> CancerTiDEConfig:
     parser.add_argument("--val_frac", type=float, default=0.15)
 
     # Model
-    parser.add_argument("--hidden_size", type=int, default=256)
+    parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--num_encoder_layers", type=int, default=3)
     parser.add_argument("--num_decoder_layers", type=int, default=2)
     parser.add_argument("--temporal_decoder_hidden", type=int, default=64)
@@ -326,6 +326,17 @@ def main() -> None:
     print("Total forecast:       ", components["total_forecast"])
     print("Linear skip baseline: ", components["linear_skip_baseline"])
     print("Deep adjustment:      ", components["deep_nonlinear_adjustment"])
+
+    # Compute saliency for look-back dose steps (horizon step 0)
+    saliency = explain_input_saliency(
+        model=model,
+        past_t=past_t,               # (1, L)
+        hist_c=hist_c,               # (1, L, C_hist)
+        fut_c=fut_c,                # (1, H, C_fut)
+        target_horizon_step=0,
+    )
+    print("Look-back timesteps saliency scores (sums to 1.0):")
+    print(saliency)
 
 if __name__ == "__main__":
     main()
