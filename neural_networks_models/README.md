@@ -22,7 +22,7 @@ cancertreatment/neural_networks_models/
 │   ├── datasets/
 │   │   └── cancer_dataset.py  # Data loading, scaling, PyTorch Dataset + DataLoaders
 │   ├── models/
-│   │   └── tide.py            # TiDE model (ResidualBlock, Encoder, Decoder, TemporalDecoder)
+│   │   └── model_name.py            # For example tide.py for TiDE model (ResidualBlock, Encoder, Decoder, TemporalDecoder)
 │   ├── trainer/
 │   │   └── trainer.py         # Trainer + EarlyStopping
 │   ├── metrics/
