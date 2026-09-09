@@ -1,6 +1,7 @@
 # cancertreatment/neural_networks_models
 
-- TiDE (Time-series Dense Encoder) model for predicting tumour cell survival outcomes of radiotherapy protocols on the EMT6/Ro cell line.
+- **TiDE** (Time-series Dense Encoder) model for predicting tumour cell survival outcomes of radiotherapy protocols on the EMT6/Ro cell line
+- **NHiTS** (Neural Hierarchical Interpolation for Time Series Forecasting) model for the EMT6/Ro radiotherapy protocol dataset
 
 ## Dataset
 
@@ -12,16 +13,16 @@
 ## Project structure
 
 ```
-cancertreatment/tide_model/
+cancertreatment/neural_networks_models/
 ├── data/
 │   ├── data.csv               # Raw dataset (200,000 protocols × 21 rows each)
 │   └── README.md              # Data schema and preprocessing notes
-├── tide/
+├── model_name/
 │   ├── config.py              # CancerTiDEConfig dataclass
 │   ├── datasets/
 │   │   └── cancer_dataset.py  # Data loading, scaling, PyTorch Dataset + DataLoaders
 │   ├── models/
-│   │   └── tide.py            # TiDE model (ResidualBlock, Encoder, Decoder, TemporalDecoder)
+│   │   └── model_name.py            # For example tide.py for TiDE model (ResidualBlock, Encoder, Decoder, TemporalDecoder)
 │   ├── trainer/
 │   │   └── trainer.py         # Trainer + EarlyStopping
 │   ├── metrics/
