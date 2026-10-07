@@ -1,7 +1,6 @@
 """Script for torch dataset classes"""
 
 import random
-from pickletools import int4
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -89,7 +88,53 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class DatasetMargin(Dataset):
-    "Cancer torch dataset maker"
+    """Dataset that also returns a second series to rank against.
+
+    With probability ``hard_pair_frac`` the partner is drawn from the series whose target
+    is within ``hard_pair_min_diff``..``hard_pair_max_diff`` cells of this one's (the pairs
+    the model actually gets wrong); otherwise it is uniformly random.
+    """
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        columns: List[str] = ["time", "dose", "time_gap"],
+        target_column: str = "target",
+        scalers: Optional[Dict[str, StandardScaler]] = None,
+        hard_pair_frac: float = 0.0,
+        hard_pair_min_diff: float = 4.0,
+        hard_pair_max_diff: float = 15.0,
+    ) -> None:
+        super().__init__(data, columns, target_column, scalers)
+        self.hard_pair_frac = hard_pair_frac
+        self.hard_pair_min_diff = hard_pair_min_diff / self.target_scale
+        self.hard_pair_max_diff = hard_pair_max_diff / self.target_scale
+        if hard_pair_frac > 0:
+            # the target of series i is on the last row of its block
+            self.targets = self.data[self.target_column].values[
+                self.series_len - 1 :: self.series_len
+            ].astype(float)
+            self.sorted_idx = np.argsort(self.targets)
+            self.sorted_targets = self.targets[self.sorted_idx]
+
+    def partner_idx(self, idx: int) -> int:
+        if self.hard_pair_frac > 0 and random.random() < self.hard_pair_frac:
+            t = self.targets[idx]
+            side = 1 if random.random() < 0.5 else -1
+            lo, hi = sorted(
+                (t + side * self.hard_pair_min_diff, t + side * self.hard_pair_max_diff)
+            )
+            a = np.searchsorted(self.sorted_targets, lo, side="left")
+            b = np.searchsorted(self.sorted_targets, hi, side="right")
+            if b - a == 0:  # nothing on that side, try the other one
+                lo, hi = sorted(
+                    (t - side * self.hard_pair_min_diff, t - side * self.hard_pair_max_diff)
+                )
+                a = np.searchsorted(self.sorted_targets, lo, side="left")
+                b = np.searchsorted(self.sorted_targets, hi, side="right")
+            if b - a > 0:
+                return int(self.sorted_idx[random.randrange(a, b)])
+        return random.randint(0, self.dataset_len - 1)
 
     def get_from_idx(self, idx: int) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """Select ith series
@@ -143,7 +188,7 @@ class DatasetMargin(Dataset):
             - 1 : (self.series_len * idx)
             + self.series_len
         ][self.target_column].to_numpy()
-        another_sample = self.get_from_idx(random.randint(0, self.dataset_len - 1))
+        another_sample = self.get_from_idx(self.partner_idx(idx))
         return (
             torch.FloatTensor(x.astype(float)),
             torch.FloatTensor(y.astype(float)),

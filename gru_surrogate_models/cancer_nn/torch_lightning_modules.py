@@ -1,24 +1,16 @@
 """'Pythorch lightning module for cancer optimization
 """
 
-import random
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from sklearn.utils import shuffle
 from torch.utils.data import DataLoader
 
 from cancer_nn.datasets import Dataset, DatasetMargin
-from cancer_nn.metrics import (
-    margin_loss,
-    max_error_99,
-    max_error_99_mape,
-    max_error_mape,
-    percent_correct,
-)
+from cancer_nn.metrics import evaluate
 from cancer_nn.used_networks import MultiHeadTaskRegressor, MultiTaskRegressor
 
 LOSSES_DICT = {
@@ -26,16 +18,6 @@ LOSSES_DICT = {
     "HuberLoss": torch.nn.HuberLoss(),
     "MSE": torch.nn.MSELoss(),
 }
-
-
-def seed_worker(worker_id):
-    worker_seed = torch.initial_seed() % 2**32
-    np.random.seed(worker_seed)
-    random.seed(worker_seed)
-
-
-g = torch.Generator()
-g.manual_seed(0)
 
 
 class CancerNet(pl.LightningModule):
@@ -46,49 +28,35 @@ class CancerNet(pl.LightningModule):
         train_df: Optional[pd.DataFrame] = None,
         val_df: Optional[pd.DataFrame] = None,
         test_df: Optional[pd.DataFrame] = None,
-        series_len: int = 20,
         lr: float = 0.001,
         margin_loss: bool = True,
         config_list: List[Dict[str, Any]] = [{"output_last_layer": True}],
         losses: List[str] = ["L1", "MSE", "HuberLoss"],
         main_loss: str = "L1",
         margin_loss_w: Union[float, int] = 3,
+        margin: float = -0.04,
         mode: str = "unet",
         w_losses: List[Union[int, float]] = [1],
-        name: str = "MultiHeadTaskRegressor",  # TODO remove
+        name: str = "MultiHeadTaskRegressor",  # config key, accepted so configs pass through
+        optimizer: str = "adam",
+        weight_decay: float = 0.0,
+        scheduler: str = "plateau",
+        hard_pair_frac: float = 0.0,
+        hard_pair_min_diff: float = 4.0,
+        hard_pair_max_diff: float = 15.0,
     ):
         super().__init__()
-        """Init function
 
-        Args:
-        ---------
-            train_df (Optional[pd.DataFrame], optional): train data frame to None.
-            val_df (Optional[pd.DataFrame], optional): val data frame . Defaults to None.
-            test_df (Optional[pd.DataFrame], optional): test data frame . Defaults to None.
-            series_len (int, optional): _description_. series length.
-            lr (float, optional): learning rate. Defaults to 0.001.
-            margin_loss (bool, optional): if set to be true training with 
-            margin ranking loss is run. Defaults to True.
-            config_list (_type_, optional): list of subnetworks config. 
-            Defaults to [{"output_last_layer": True}].
-            losses (List[str], optional): losses names list from (L1, HuberLoss, MSE). 
-            Defaults to ["L1", "MSE", "HuberLoss"].
-            main_loss (str, optional): main loss name from (L1, HuberLoss, MSE).
-            Defaults to "L1".
-            margin_loss_w (Union[float, int], optional): weight of margin ranking loss. Defaults to 3.
-            mode (str, optional): defines type of subnetwork (fcnn, unet, 
-            cnn, lstm, cnn_lstm, cnn_lstm_att). Defaults to "unet".
-            w_losses (List[Union[int, float]], optional): weigths for losses,
-             first weight for main loss and the rest for losses 
-             passed in losses. Defaults to [1].
-        """
-
-        self.series_len = series_len
         self.lr = lr
         self.margin_loss = margin_loss
         self.margin_loss_w = margin_loss_w
-        self.mode = mode
         self.w_losses = w_losses
+        self.optimizer_name = optimizer.lower()
+        self.weight_decay = weight_decay
+        self.scheduler_name = scheduler.lower()
+        self.hard_pair_frac = hard_pair_frac
+        self.hard_pair_min_diff = hard_pair_min_diff
+        self.hard_pair_max_diff = hard_pair_max_diff
 
         # data
         self.train_df = train_df
@@ -97,23 +65,15 @@ class CancerNet(pl.LightningModule):
         self.prepare()
 
         # model
-        features = self.train_set.__getitem__(0)[0]
-        self.emb_size = features.size()[1]
         self.val_loss = []
-        self.val_mae = []
         self.test_loss = []
-        self.test_mae = []
-        self.train_loss_1 = []
-        self.train_mae = []
         self.val_predictions = []
         self.val_true = []
         self.test_true = []
         self.test_predictions = []
-        self.train_loss = []
-        self.train_mae = []
         if self.margin_loss:
             self.losses = [LOSSES_DICT[loss] for loss in losses] + [
-                torch.nn.MarginRankingLoss(margin=-0.04)
+                torch.nn.MarginRankingLoss(margin=margin)
             ]
             self.head_output_size = len(self.losses)
             self.model = MultiHeadTaskRegressor(config_list, mode=mode)
@@ -123,42 +83,10 @@ class CancerNet(pl.LightningModule):
             self.head_output_size = len(self.losses) - 1
             self.model = MultiTaskRegressor(config_list, mode=mode)
         self.losses = [LOSSES_DICT[main_loss]] + self.losses
-
-    @staticmethod
-    def smape(y_true: np.array, y_pred: np.array) -> float:
-        """SMAPE metric
-
-        Args:
-        ---------
-            y_true (np.array): true labels
-            y_pred (np.array): predicted labels
-
-        Returns:
-        ---------
-            float: SMAPE metric value
-        """
-        return (
-            100
-            / len(y_true)
-            * np.sum(
-                2 * np.abs(y_pred - y_true) / (0.01 + np.abs(y_true) + np.abs(y_pred))
-            )
-        )
-
-    @staticmethod
-    def mape(y_true: np.array, y_pred: np.array) -> float:
-        """MAPE metric
-
-        Args:
-        ---------
-            y_true (np.array): true labels
-            y_pred (np.array): predicted labels
-
-        Returns:
-        ---------
-            float: MAPE metric value
-        """
-        return np.mean(np.abs((y_true - y_pred) / np.abs(y_true)))
+        # event-based subnetworks need the raw feature scale to tell doses from padding
+        for layer in self.model.layers:
+            if hasattr(layer, "set_feature_scaling"):
+                layer.set_feature_scaling(self.scalers)
 
     def prepare(self) -> None:
         """Prepare data with torch dataset,
@@ -166,7 +94,12 @@ class CancerNet(pl.LightningModule):
 
         """
         if self.margin_loss:
-            self.train_set = DatasetMargin(self.train_df.copy())
+            self.train_set = DatasetMargin(
+                self.train_df.copy(),
+                hard_pair_frac=self.hard_pair_frac,
+                hard_pair_min_diff=self.hard_pair_min_diff,
+                hard_pair_max_diff=self.hard_pair_max_diff,
+            )
         else:
             self.train_set = Dataset(self.train_df.copy())
         self.scalers = self.train_set.scalers
@@ -277,19 +210,8 @@ class CancerNet(pl.LightningModule):
             )
             loss += margin_loss
             wandb_log["train/margin_loss"] = margin_loss.item()
-            wandb_log["train/correct_percent"] = (
-                torch.sum(
-                    (output[:, 0] - output[:, -1]).squeeze().sign()
-                    == (batch[1] - batch[3]).squeeze().sign()
-                )
-                / batch[1].size()[0]
-            ).item()
 
         self.logger.experiment.log(wandb_log)
-        self.train_loss.append(loss.item())
-        self.train_mae.append(
-            torch.mean(torch.abs(batch[1] - output[:, 0])).detach().cpu()
-        )
         return loss
 
     def validation_step(
@@ -317,80 +239,29 @@ class CancerNet(pl.LightningModule):
                 ],
             ),
         )
-        wandb_log = {
-            "val/loss_mae": torch.mean(
-                torch.abs(
-                    batch[1] * self.target_scale - output[:, 0] * self.target_scale
-                )
-            ).item()
-        }
         if self.margin_loss:
-            margin_loss = (
+            loss += (
                 self.losses[-1](
                     output[:, 0], output[:, -1], (batch[1] - batch[3]).sign()
                 )
                 * self.margin_loss_w
             )
-            loss += margin_loss
-            wandb_log["val/margin_loss"] = margin_loss.item()
-            wandb_log["val/correct_percent"] = (
-                torch.sum(
-                    (output[:, 0] - output[:, -1]).squeeze().sign()
-                    == (batch[1] - batch[3]).squeeze().sign()
-                )
-                / batch[1].size()[0]
-            ).item()
         self.val_loss.append(loss.detach().cpu())
-        self.val_mae.append(
-            torch.mean(torch.abs(batch[1] - output[:, 0])).detach().cpu()
-        )
         self.val_true.append(batch[1].flatten().detach().cpu())
         self.val_predictions.append(output[:, 0].flatten().detach().cpu())
-        metric = {"val_loss": loss}
-        self.logger.experiment.log(wandb_log)
-
-        self.log_dict(metric)
+        self.log_dict({"val_loss": loss})
         return loss
 
     def on_validation_epoch_end(self):
-        """validation epoch end  (see pythorch-lightning
-        documenation for more information)
-        """
-        lr = self.optimizers().param_groups[0]["lr"]
+        y_true = torch.cat(self.val_true).numpy() * self.target_scale
+        y_pred = torch.cat(self.val_predictions).numpy() * self.target_scale
         wandb_log = {
-            "lr": lr,
-            "val/epoch_loss": np.mean(np.array(self.val_loss)),
-            "val/epoch_mae": np.mean(np.array(self.val_mae)),
+            "lr": self.optimizers().param_groups[0]["lr"],
+            "val/loss": float(np.mean(np.array(self.val_loss))),
         }
-
-        self.val_loss = []
-        self.val_mae = []
-        y_true = torch.flatten(torch.cat(self.val_true)).detach().numpy()
-        y_pred = torch.flatten(torch.cat(self.val_predictions)).detach().numpy()
-        wandb_log["val/epoch_mape"] = self.mape(y_true, y_pred)
-
-        y_true_scaled = y_true * self.target_scale
-        y_pred_scaled = y_pred * self.target_scale
-        y_true_shuffled, y_pred_shuffled = shuffle(
-            y_true_scaled, y_pred_scaled, random_state=0
-        )
-        wandb_log["val/margin"] = margin_loss(
-            y_true_scaled, y_true_shuffled, y_pred_scaled, y_pred_shuffled
-        )
-        wandb_log["val/percent"] = percent_correct(
-            y_true_scaled, y_true_shuffled, y_pred_scaled, y_pred_shuffled
-        )
-        wandb_log["val/rmse"] = np.sqrt(np.mean((y_true_scaled - y_pred_scaled) ** 2))
-        wandb_log["val/max_error"] = np.max(np.abs(y_true_scaled - y_pred_scaled))
-        wandb_log["val/max_error_99"] = max_error_99(y_true_scaled, y_pred_scaled)
-        wandb_log["val/max_error_mape"] = max_error_mape(y_true_scaled, y_pred_scaled)
-        wandb_log["val/max_error_99_mape"] = max_error_99_mape(
-            y_true_scaled, y_pred_scaled
-        )
-
+        wandb_log.update({f"val/{k}": v for k, v in evaluate(y_true, y_pred).items()})
         self.logger.experiment.log(wandb_log)
-        self.val_predictions = []
-        self.val_true = []
+        self.val_loss, self.val_true, self.val_predictions = [], [], []
 
     def test_step(
         self, batch: Tuple[torch.Tensor], batch_idx: int
@@ -417,57 +288,28 @@ class CancerNet(pl.LightningModule):
                 ],
             ),
         )
-        wandb_log = {
-            "test/loss_mae": torch.mean(
-                torch.abs(
-                    batch[1] * self.target_scale - output[:, 0] * self.target_scale
-                )
-            ).item()
-        }
         if self.margin_loss:
-            margin_loss = (
+            loss += (
                 mar_loss(output[:, 0], output[:, -1], (batch[1] - batch[3]).sign())
                 * self.margin_loss_w
             )
-            loss += margin_loss
-            wandb_log["test/margin_loss"] = margin_loss.item()
-            wandb_log["test/correct_percent"] = (
-                torch.sum(
-                    (output[:, 0] - output[:, -1]).squeeze().sign()
-                    == (batch[1] - batch[3]).squeeze().sign()
-                )
-                / batch[1].size()[0]
-            ).item()
         self.test_loss.append(loss.detach().cpu())
-        self.test_mae.append(
-            torch.mean(torch.abs(batch[1] - output[:, 0])).detach().cpu()
-        )
         self.test_true.append(batch[1].flatten().detach().cpu())
         self.test_predictions.append(output[:, 0].flatten().detach().cpu())
-        metric = {"test_loss": loss}
-        self.logger.experiment.log(wandb_log)
-
-        self.log_dict(metric)
+        self.log_dict({"test_loss": loss})
         return loss
 
     def on_test_epoch_end(self):
-        """test epoch end  (see pythorch-lightning
-        documenation for more information)
-        """
-        wandb_log = {
-            "test/epoch_loss": np.mean(np.array(self.test_loss)),
-            "test/epoch_mae": np.mean(np.array(self.test_mae)),
-        }
-        self.test_loss = []
-        self.test_mae = []
-        y_true = torch.flatten(torch.cat(self.test_true)).detach().numpy()
-        y_pred = torch.flatten(torch.cat(self.test_predictions)).detach().numpy()
-        wandb_log["test/epoch_mape"] = self.mape(y_true, y_pred)
+        y_true = torch.cat(self.test_true).numpy() * self.target_scale
+        y_pred = torch.cat(self.test_predictions).numpy() * self.target_scale
+        wandb_log = {"test/loss": float(np.mean(np.array(self.test_loss)))}
+        wandb_log.update({f"test/{k}": v for k, v in evaluate(y_true, y_pred).items()})
         self.logger.experiment.log(wandb_log)
+        self.test_loss = []
 
     def configure_optimizers(
         self,
-    ) -> Tuple[List[torch.optim.Adam], List[Dict[str, Any]]]:
+    ) -> Tuple[List[torch.optim.Optimizer], List[Dict[str, Any]]]:
         """configure optimizers  (see pythorch-lightning
         documenation for more information)
 
@@ -476,15 +318,56 @@ class CancerNet(pl.LightningModule):
             (Tuple(List[torch.optim], List[Dict[str, Any]])): List
             with optimizers, List with schedulers
         """
-        optimizers = [torch.optim.Adam(self.parameters(), lr=self.lr)]
-        schedulers = [
-            {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizers[0], mode="min", factor=0.7, patience=5
-                ),
-                "monitor": "val_loss",
-                "interval": "epoch",
-                "frequency": 1,
-            },
+        optimizer_classes = {"adam": torch.optim.Adam, "adamw": torch.optim.AdamW}
+        if self.optimizer_name not in optimizer_classes:
+            raise ValueError(
+                f"unsupported optimizer {self.optimizer_name!r}, "
+                f"expected one of {list(optimizer_classes)}"
+            )
+        optimizers = [
+            optimizer_classes[self.optimizer_name](
+                self.parameters(), lr=self.lr, weight_decay=self.weight_decay
+            )
         ]
+
+        if self.scheduler_name == "plateau":
+            schedulers = [
+                {
+                    "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                        optimizers[0], mode="min", factor=0.7, patience=5
+                    ),
+                    "monitor": "val_loss",
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            ]
+        elif self.scheduler_name == "onecycle":
+            steps_per_epoch = len(self.train_dataloader())
+            schedulers = [
+                {
+                    "scheduler": torch.optim.lr_scheduler.OneCycleLR(
+                        optimizers[0],
+                        max_lr=self.lr,
+                        steps_per_epoch=steps_per_epoch,
+                        epochs=self.trainer.max_epochs,
+                    ),
+                    "interval": "step",
+                    "frequency": 1,
+                },
+            ]
+        elif self.scheduler_name == "cosine":
+            schedulers = [
+                {
+                    "scheduler": torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                        optimizers[0], T_0=10
+                    ),
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            ]
+        else:
+            raise ValueError(
+                f"unsupported scheduler {self.scheduler_name!r}, "
+                "expected 'plateau', 'onecycle', or 'cosine'"
+            )
         return (optimizers, schedulers)

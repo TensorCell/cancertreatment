@@ -13,18 +13,6 @@ import pandas as pd
 import torch
 import yaml
 from pytorch_lightning.loggers import WandbLogger
-from sklearn.metrics import max_error, mean_absolute_error, mean_squared_error
-from sklearn.utils import shuffle
-
-from cancer_nn.metrics import (
-    margin_loss,
-    max_error_99,
-    max_error_99_mape,
-    max_error_mape,
-    mean_absolute_percentage_error,
-    percent_correct,
-)
-from cancer_nn.torch_lightning_modules import CancerNet
 
 
 def set_seeds(seed: int) -> None:
@@ -44,7 +32,9 @@ def set_seeds(seed: int) -> None:
     random.seed(seed)  # Python random module.
     torch.manual_seed(seed)
     torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    # True would disable the fused cuDNN RNN kernels (~25x slower) and cuDNN RNN
+    # dropout is nondeterministic anyway
+    torch.backends.cudnn.deterministic = False
 
 
 def train_val_test_split(
@@ -138,35 +128,3 @@ def read_subnetworks_configs(
         net_config = read_yml_config(config_folder, config_name)
         config_list.append(net_config)
     return config_list
-
-
-def log_custom_metrics(
-    network: CancerNet,
-    wandb_logger: WandbLogger,
-) -> None:
-    """log custom metrics after training
-
-    Args:
-    ------------
-        network (CancerNet): pl.Lighning cancer module
-        wandb_logger (WandbLogger): wandb logger
-    """
-    print(f"Calculating margin loss and correct percent ...")
-    y_true, y_pred = (
-        np.array(torch.cat(network.test_true)) * network.target_scale,
-        np.array(torch.cat(network.test_predictions)) * network.target_scale,
-    )
-    y_true_1, y_pred_1 = shuffle(y_true, y_pred, random_state=0)
-    wandb_logger.log_metrics(
-        {
-            "test/margin": margin_loss(y_true, y_true_1, y_pred, y_pred_1),
-            "test/percent": percent_correct(y_true, y_true_1, y_pred, y_pred_1),
-            "test/rmse": mean_squared_error(y_true, y_pred) ** 0.5,
-            "test/mae": mean_absolute_error(y_true, y_pred),
-            "test/mape": mean_absolute_percentage_error(y_true, y_pred),
-            "test/max_error": max_error(y_true, y_pred),
-            "test/max_error_99": max_error_99(y_true, y_pred),
-            "test/max_error_mape": max_error_mape(y_true, y_pred),
-            "test/max_error_99_mape": max_error_99_mape(y_true, y_pred),
-        }
-    )

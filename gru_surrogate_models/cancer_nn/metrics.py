@@ -1,36 +1,23 @@
-"""
-Script  for custom metrics functions which 
-are used for experiments evaluation.
-"""
+"""Evaluation metrics; ``evaluate`` is the one scoring function used everywhere."""
 
 import numpy as np
 import torch
+from sklearn.utils import shuffle
 
 
-def margin_loss(
-    y_true_1: np.array, y_true_2: np.array, y_pred_1: np.array, y_pred_2: np.array
-) -> float:
-    """Margin Ranking Loss (MRL):
-    https://pytorch.org/docs/stable/generated/torch.nn.MarginRankingLoss.html
-
-    Args:
-    ---------------
-        y_true_1 (np.array): true labels for sample 1
-        y_true_2 (np.array): predictions for sample 1
-        y_pred_1 (np.array): true labels for sample 2
-        y_pred_2 (np.array): predictions for sample 2
-
-    Returns:
-    ---------------
-        float: MRL value
-    """
-    y_pred_1 = torch.Tensor(y_pred_1.flatten())
-    y_pred_2 = torch.Tensor(y_pred_2.flatten())
-    y_true_1 = torch.Tensor(y_true_1.flatten())
-    y_true_2 = torch.Tensor(y_true_2.flatten())
-    order = (y_true_1 - y_true_2).sign()
-    loss = torch.nn.MarginRankingLoss()
-    return loss(y_pred_1, y_pred_2, order).item()
+def evaluate(y_true: np.array, y_pred: np.array) -> dict:
+    """Score a whole split in cells. ``percent`` pairs every series with one other series
+    of the split by a fixed permutation (random_state=0)."""
+    y_true = np.asarray(y_true, dtype=float).ravel()
+    y_pred = np.asarray(y_pred, dtype=float).ravel()
+    y_true_1, y_pred_1 = shuffle(y_true, y_pred, random_state=0)
+    return {
+        "mae": float(np.mean(np.abs(y_true - y_pred))),
+        "rmse": float(np.sqrt(np.mean((y_true - y_pred) ** 2))),
+        "mape": float(mean_absolute_percentage_error(y_true, y_pred)),
+        "percent": float(percent_correct(y_true, y_true_1, y_pred, y_pred_1)),
+        "max_error_99": float(max_error_99(y_true, y_pred)),
+    }
 
 
 def percent_correct(
@@ -91,35 +78,3 @@ def max_error_99(y_true: np.array, y_pred: np.array) -> float:
         float: 99 percentile MAE error value
     """
     return np.max(np.sort(np.abs(y_true - y_pred))[: int(y_true.shape[0] * 0.99)])
-
-
-def max_error_mape(y_true: np.array, y_pred: np.array) -> float:
-    """Max MAPE error
-
-    Args:
-    ---------------
-        y_true (np.array): true labels
-        y_pred (np.array): predicted labels
-
-    Returns:
-    ---------------
-        float: Max MAPE error value
-    """
-    mape = np.abs((y_true - y_pred) / np.abs(y_true))
-    return np.max(np.sort(mape))
-
-
-def max_error_99_mape(y_true: np.array, y_pred: np.array) -> float:
-    """99 percentile MAPE error
-
-    Args:
-    ---------------
-        y_true (np.array): true labels
-        y_pred (np.array): predicted labels
-
-    Returns:
-    ---------------
-        float: 99 percentile MAPE error value
-    """
-    mape = np.abs((y_true - y_pred) / np.abs(y_true))
-    return np.max(np.sort(mape)[: int(y_true.shape[0] * 0.99)])

@@ -20,7 +20,7 @@ def preprocess_row(idx):
     new_df["series"] = idx
     new_df["time_idx"] = range(series_len - 1)
     new_df["is_target"] = [0 for _ in range(series_len - 2)] + [1]
-    new_df["target"] = [0 for _ in range(series_len - 2)] + [row[-1]]
+    new_df["target"] = [0 for _ in range(series_len - 2)] + [row.iloc[-1]]
     new_df["time_gap"] = [0] + list(new_df["time"].diff().dropna().values)
     return new_df
 

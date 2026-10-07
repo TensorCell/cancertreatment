@@ -3,14 +3,14 @@ cancer custom neural networks
 """
 
 import click
+import pandas as pd
 import pytorch_lightning as pl
 import torch
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, StochasticWeightAveraging
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from cancer_nn.experiments_helpers import (
-    log_custom_metrics,
     log_experiment_parameters,
     read_subnetworks_configs,
     read_yml_config,
@@ -21,7 +21,7 @@ from cancer_nn.torch_lightning_modules import CancerNet
 
 
 @click.command()
-@click.option("-csv_path", default="data/data.csv", help="path to csv")
+@click.option("-csv_path", default="data/data_400k.csv", help="path to csv")
 @click.option(
     "-group_id",
     default="series",
@@ -45,6 +45,13 @@ from cancer_nn.torch_lightning_modules import CancerNet
     help="model config file",
 )
 @click.option("-seed", default=0, help="seed")
+@click.option("-swa_lrs", default=0.0, type=float, help="SWA learning rate (0 = off)")
+@click.option(
+    "-train_on_val",
+    is_flag=True,
+    default=False,
+    help="train on train+val for exactly max_epochs, keep the last checkpoint",
+)
 def main(
     csv_path: str,
     group_id: str,
@@ -54,6 +61,8 @@ def main(
     max_epochs: int,
     config: str,
     seed: int,
+    swa_lrs: float,
+    train_on_val: bool,
 ):
     """main function for training
     custom neural networks for cancer
@@ -78,6 +87,10 @@ def main(
 
     set_seeds(seed)
     train, val, test = train_val_test_split(csv_path, group_id)
+    if train_on_val:
+        n_series = train.series.nunique() + val.series.nunique()
+        print(f"train_on_val: {n_series} series (train+val), fixed {max_epochs} epochs")
+        train = pd.concat([train, val])
 
     config = read_yml_config(config_folder, config)
     wandb_config = read_yml_config(config_folder, wandb_config)
@@ -87,20 +100,34 @@ def main(
     )
 
     log_experiment_parameters(wandb_logger, config, seed)
+    wandb_logger.log_hyperparams({"train_on_val": train_on_val})
 
     config["network"]["config_list"] = read_subnetworks_configs(config_folder, config)
 
     network = CancerNet(train_df=train, val_df=val, test_df=test, **config["network"])
-    early_stop_callback = EarlyStopping(
-        monitor="val_loss", min_delta=0.00, patience=20, verbose=True, mode="min"
-    )
-    checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
-        dirpath=saved_model_path,
-        filename=f"{wandb_logger.experiment.id}",
-        save_top_k=1,
-        mode="min",
-    )
+    if train_on_val:
+        # no held-out val: keep the last epoch, no early stopping
+        checkpoint_callback = ModelCheckpoint(
+            monitor=None,
+            dirpath=saved_model_path,
+            filename=f"{wandb_logger.experiment.id}",
+            save_top_k=1,
+        )
+        callbacks = [checkpoint_callback]
+    else:
+        early_stop_callback = EarlyStopping(
+            monitor="val_loss", min_delta=0.00, patience=20, verbose=True, mode="min"
+        )
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            dirpath=saved_model_path,
+            filename=f"{wandb_logger.experiment.id}",
+            save_top_k=1,
+            mode="min",
+        )
+        callbacks = [early_stop_callback, checkpoint_callback]
+    if swa_lrs > 0:
+        callbacks.append(StochasticWeightAveraging(swa_lrs=swa_lrs))
 
     trainer = pl.Trainer(
         default_root_dir=saved_model_path,
@@ -109,7 +136,7 @@ def main(
         devices=1,
         logger=wandb_logger,
         gradient_clip_val=0.25,
-        callbacks=[early_stop_callback, checkpoint_callback],
+        callbacks=callbacks,
     )
 
     trainer.fit(network)
@@ -125,7 +152,6 @@ def main(
         **config["network"],
     )
     trainer.test(network)
-    log_custom_metrics(network, wandb_logger)
     print(f"Done!")
 
 
