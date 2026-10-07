@@ -1,0 +1,5 @@
+hidden_size: 96
+num_layers: 3
+bidirectional: true
+dropout: 0.2
+readout: additive_log

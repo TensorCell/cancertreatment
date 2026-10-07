@@ -1,0 +1,6 @@
+d_model: 96
+nhead: 4
+num_layers: 3
+dim_feedforward: 192
+dropout: 0.1
+readout: additive_log
