@@ -1,0 +1,13 @@
+network:
+  name: MultiHeadTaskRegressor
+  config_list: ['single/gru_xl.yml']
+  losses: ['HuberLoss']
+  main_loss: "HuberLoss"
+  margin_loss: True
+  margin_loss_w: 5
+  margin: -0.04
+  w_losses: [1, 1]
+  mode: 'gru'
+  optimizer: 'adamw'
+  weight_decay: 0.0001
+  scheduler: 'onecycle'

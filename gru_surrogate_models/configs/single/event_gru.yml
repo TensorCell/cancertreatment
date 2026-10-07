@@ -1,0 +1,5 @@
+hidden_size: 96
+flow_hidden: 192
+flow_steps: 2
+dropout: 0.1
+readout: linear

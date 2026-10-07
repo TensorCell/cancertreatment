@@ -1,0 +1,34 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+.env
+.env.*
+.venv/
+venv/
+
+# data lives on Hugging Face, checkpoints and runs on W&B
+/data/*
+!/data/README.md
+/pretrained_models/
+/wandb/
+/logs/
+*.ckpt
+*.pt
+*.npz
+
+# local only: W&B export, thesis PDF, dataset-generation tooling
+/notes/
+/docs/
+/emt6ro/
+
+# report: only the compiled PDF
+/report/*
+!/report/main.pdf
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

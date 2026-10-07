@@ -1,0 +1,12 @@
+# Control for 39: margin 0 alone, uniform random pairs. Separates the effect
+# of the margin change from the effect of hard-pair mining.
+network:
+  name: MultiHeadTaskRegressor
+  config_list: ['single/gru_xl.yml']
+  losses: ['L1']
+  main_loss: "L1"
+  margin_loss: True
+  margin_loss_w: 5
+  margin: 0.0
+  w_losses: [1, 1]
+  mode: 'gru'

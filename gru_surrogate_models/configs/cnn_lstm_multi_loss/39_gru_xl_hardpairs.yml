@@ -1,0 +1,18 @@
+network:
+  name: MultiHeadTaskRegressor
+  config_list: ['single/gru_xl.yml']
+  losses: ['L1']
+  main_loss: "L1"
+  margin_loss: True
+  margin_loss_w: 5
+  # margin 0 instead of -0.04: with -0.04 (= -20 cells, target_scale 500)
+  # the ranking loss only fires on pairs mis-ordered by >20 cells, which a
+  # close pair essentially never is, so hard pairs would contribute nothing
+  margin: 0.0
+  w_losses: [1, 1]
+  mode: 'gru'
+  # half of the ranking-loss pairs have a true target 4..15 cells away from
+  # this series' target (hard but above the ~4.4-cell label-noise level)
+  hard_pair_frac: 0.5
+  hard_pair_min_diff: 4.0
+  hard_pair_max_diff: 15.0
