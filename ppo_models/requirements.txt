@@ -1,0 +1,14 @@
+gym==0.26.2
+gymnasium==1.1.1
+shimmy==2.0.0
+stable-baselines3[extra]==2.7.1
+torch==2.6.0
+numpy==1.23.5
+pandas==1.4.4
+matplotlib==3.9.4
+seaborn==0.13.2
+ipykernel==6.31.0
+jupyterlab==4.2.5
+
+-e ../EMT6-Ro/build/python
+-e ./TumorGrowthEnv
